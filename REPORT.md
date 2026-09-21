@@ -107,7 +107,7 @@ localisation needs.
 
 ---
 
-## 4. Three bugs I found in my own evaluation
+## 4. Four bugs I found in my own evaluation
 
 The brief says it would rather read an honest account of a system at 70% than a
 claim of 95% with no error analysis. These are the three places my own harness
@@ -153,6 +153,47 @@ Measured on a real catalogue image:
 
 Two fixes, both kept: use the register variant, and take the bounding box of the
 **largest connected component** rather than of all above-threshold patches.
+
+### 4.4 The eval path had never been run, and it was broken two ways
+
+The gate is *"does it run from a clean checkout"*. I had built the entire
+evaluation harness without once running `vpm eval` end to end. Doing so surfaced
+two bugs that would otherwise have produced a report full of confident, wrong
+numbers.
+
+**The loud one.** The index was PCA-whitened to 256 dims; queries were encoded at
+1536 and never passed through the whitener — `matmul: size 1536 is different from
+256`. Fixed by carrying the whitener through the matcher, and by a constructor
+check that refuses a dimension mismatch rather than discovering it at query time.
+
+**The silent one, which was far worse.** The first successful run reported clean
+Recall@1 of **0.067** against a bake-off baseline of 0.672 — while simultaneously
+reporting the median rank of the true item as **1**. Both cannot be true, and
+that contradiction is what made it findable:
+
+```
+items in index: 3000
+distinct test items: 40
+test items ACTUALLY IN THE INDEX: 6 (15%)
+```
+
+The test set was sampled from all 36,506 scraped items while the index held the
+first 3,000. **34 of 40 "in-catalogue" items were never in the catalogue**, so
+most "in-catalogue" photos were silently out-of-catalogue queries — accuracy
+understated, and refusal AUROC collapsing to 0.502 because both classes were
+really the same class.
+
+The fix that matters is not the missing parameter. It is `check_items_indexed`,
+which now **fails the run** if any photo labelled in-catalogue has an item absent
+from the index. This is exactly the failure mode the brief warns about for Part B
+— *"items that are genuinely in your catalogue"* — and a hundred hand-shot
+photographs are far more expensive to get wrong than a synthetic set.
+
+**The generalisable lesson:** a merely *bad* metric is easy to rationalise. Both
+of these were caught because they were *impossible* — a 10× gap against a known
+baseline, and a rank-1 truth that somehow was not the top-1 answer. It is worth
+building enough redundant cross-checks that errors surface as contradictions
+rather than as disappointing numbers.
 
 ---
 
@@ -346,8 +387,101 @@ What *is* built and tested:
 
 ---
 
-## 9. What does not work, and what I did not do
+---
 
+## 9. Results
+
+Produced by `vpm eval` (`reports/eval/report.md`). **These are from the synthetic
+stand-in set, not hand-shot photographs**, and must not be read as a Part B
+result. What they demonstrate is that the measurement machinery works and that it
+already surfaces a real, specific failure.
+
+Catalogue: 3,000 items / 8,994 views, SigLIP 2 whitened to 256d.
+Test split: 90 hard, 30 clean, 20 out-of-catalogue.
+
+| set | R@1 SKU | R@1 style | R@5 SKU | median latency |
+|---|---|---|---|---|
+| clean | 1.000 [1.000, 1.000] | 1.000 | 1.000 | 159 ms |
+| hard | **0.556** [0.467, 0.644] | 0.567 | 0.656 | 160 ms |
+
+**The clean 1.000 is an artefact and I am not claiming it as a result.** In the
+synthetic set the "clean control" *is* the indexed image, so the match is exact
+by construction. Real clean photographs would be different images of the same
+object and would score well below 1.0. The figure is useful only as a sanity
+check that indexing and retrieval are wired correctly — which, given §4.4, is not
+a trivial thing to confirm.
+
+### The gap between the two halves
+
+Paired by item, exact McNemar: **40 clean-right/hard-wrong, 0 in the other
+direction. A 44.4 pp drop, p = 1.8 × 10⁻¹².** The conditions cost roughly half
+the system's accuracy, and the direction is completely one-sided.
+
+### Which conditions actually hurt
+
+Per-condition accuracy is confounded (conditions co-occur by construction, as
+they do in reality), so the marginal-effects model is what the ranking should be
+read from:
+
+| condition | n | R@1 | marginal effect | 95% CI on log-odds |
+|---|---|---|---|---|
+| **cluttered_background** | 23 | **0.000** | **−58.1 pp** | [−3.34, −2.45] |
+| low_light | 17 | 0.412 | −22.2 pp | [−2.05, −0.26] |
+| partial_occlusion | 10 | 0.500 | −5.6 pp | [−1.46, +0.63] |
+| small_in_frame | 12 | 0.333 | −4.2 pp | [−0.84, +0.37] |
+| defocus | 22 | 0.682 | +2.3 pp | [−0.42, +0.70] |
+| motion_blur | 21 | 0.667 | +4.9 pp | [−0.46, +1.10] |
+| specular_reflection | 14 | 0.786 | — | — |
+
+Only **two** conditions have intervals excluding zero. Everything else is
+indistinguishable at this sample size, and the report says so rather than ranking
+noise.
+
+**Cluttered background is catastrophic — 0 correct out of 23.** That is the
+single most actionable finding, and it points straight at §4.3: the saliency
+localiser is what is supposed to handle clutter, and it evidently does not. The
+conditions I expected to dominate — motion blur, defocus — are not
+distinguishable from zero effect. I would not have guessed that ordering.
+
+Dose response: each additional adverse condition multiplies the odds of a correct
+match by **0.366**. Accuracy falls 0.709 (one condition) → 0.308 (two).
+
+### Refusal
+
+| | |
+|---|---|
+| AUROC, in-catalogue vs out | **0.726** (120 in, 20 out) |
+| Calibrated vs raw cosine AUROC (calibration set) | 0.924 vs 0.890 |
+| False accept rate | **0.550** |
+| False reject rate | 0.258 (nominal α = 0.10) |
+| **Wrong-accept rate** | **0.100** |
+| AURC / E-AURC | 0.147 / 0.027 |
+
+**This is the weakest part of the system and I am not going to dress it up.** A
+FAR of 0.55 means the refuser accepts more than half of the out-of-catalogue
+shoes. With only 20 negatives the interval on that is very wide, but the point
+estimate is bad.
+
+**The conformal coverage guarantee did not hold**: FRR came out at 0.258 against
+a nominal 0.10. This is the exchangeability violation predicted in §6 —
+calibration is fitted on synthetically corrupted catalogue views, and the test
+queries are a different distribution. The guarantee is only as good as its
+precondition, and here the precondition is false. That is the honest reading, and
+it is why the design measures coverage rather than asserting it.
+
+The diagnosis is available rather than speculative: out-of-catalogue items are
+*other shoes*, and §5 showed identity is worth 0.008 of raw cosine. A different
+shoe is not far away in this space. Whitening widened that gap 15×, which is why
+the calibrated AUROC (0.924) beats raw cosine (0.890) — but the remaining margin
+is still thin, and a 20-negative sample cannot resolve where the threshold
+belongs. The fix is more negatives and a larger distractor database, not a
+different threshold.
+
+## 10. What does not work, and what I did not do
+
+0. **Refusal is the weak point**: FAR 0.550 at a wrong-accept rate of 0.100, and
+   conformal coverage missed nominal (FRR 0.258 vs α = 0.10). Diagnosed in §8,
+   not hidden.
 1. **Cross-view retrieval is the ceiling, and it is low.** At 0.672 R@1 on clean
    held-out views, a third of clean queries already fail. §5 explains why:
    identity is 0.8% of the signal. Whitening treats the symptom on the margin
@@ -371,7 +505,7 @@ What *is* built and tested:
    projection head. Both were planned; both were cut to keep the error analysis
    deep rather than the feature list long, which is what the brief asks for.
 
-## 10. What I would do next, in order
+## 11. What I would do next, in order
 
 1. Shoot the 130 + 30 photographs, lock the split, and measure the
    synthetic→real calibration gap. Everything else is downstream of this.

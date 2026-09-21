@@ -87,7 +87,7 @@ def main() -> None:
 
     keep = cap_views(ce.emb, ce.item_ids, k=4)
     index = FlatIndex(ce.emb[keep], ce.item_ids[keep], ce.view_ids[keep])
-    matcher = Matcher(bb, index, localise_query=False, tta=False)
+    matcher = Matcher(bb, index, localise_query=False, tta=False, whitener=whitener)
     indexed = set(index.unique_items.tolist())
     print(f"index: {index.n_items} items / {len(index.emb)} views")
 

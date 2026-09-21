@@ -1,0 +1,134 @@
+=== calibrator ===
+index: 3000 items / 8994 views
+pool: 3000 indexed items, 32493 genuinely-absent items
+  positives: 200
+  positives: 400
+  positives: 600
+  positives: 600 total
+  negatives: 200
+  negatives: 400
+  negatives: 400 total
+dataset: 1000 rows, positive rate 0.303
+
+[with_quality] AUROC calibrated 0.924  vs raw cosine 0.890
+    entropy_top10                -1.708
+    zscore_q                     -1.480
+    s1_minus_mean100             +0.975
+    s1_minus_mean10              +0.478
+    mean_luma                    +0.474
+    luma_p95                     -0.437
+
+[no_quality] AUROC calibrated 0.921  vs raw cosine 0.890
+    entropy_top10                -1.734
+    zscore_q                     -1.693
+    s1_minus_mean100             +0.956
+    s1_minus_mean10              +0.399
+    s1                           +0.355
+    s1_minus_distractor_max      +0.355
+
+wrote data/calibrator/ (calibrators, conformal.json, summary.json)
+=== eval ===
+manifest: {
+  "photos": 180,
+  "items": 40,
+  "by_kind": {
+    "clean": 40,
+    "hard": 120,
+    "out_of_catalogue": 20
+  },
+  "by_split": {
+    "dev": 40,
+    "test": 140
+  },
+  "conditions": {
+    "defocus": 34,
+    "low_light": 33,
+    "cluttered_background": 42,
+    "specular_reflection": 17,
+    "small_in_frame": 24,
+    "partial_occlusion": 14,
+    "motion_blur": 35,
+    "off_angle": 31
+  },
+  "mean_conditions_per_hard_photo": 1.65
+}
+loaded calibrator + conformal refuser from data/calibrator
+ran 180 photos
+
+## Results — split `test`
+
+140 photos: 90 hard, 30 clean, 20 out-of-catalogue
+
+### Headline
+
+| set | R@1 SKU | R@1 style | R@5 SKU | median rank of truth | median latency |
+|---|---|---|---|---|---|
+| clean | 0.067 [0.000, 0.167] | 0.067 [0.000, 0.167] | 0.067 [0.000, 0.167] | 1 | 133 ms |
+| hard | 0.022 [0.000, 0.067] | 0.022 [0.000, 0.067] | 0.044 [0.000, 0.111] | 4 | 131 ms |
+
+95% intervals are cluster bootstrap resampling **items**, not photos.
+
+### The gap between the two halves (paired by item, McNemar exact)
+
+- clean-right/hard-wrong: **4**, clean-wrong/hard-right: **0**
+- accuracy drop: **+4.4 pp** over 90 pairs, p = 0.125
+
+### Accuracy by failure condition
+
+| condition | n | R@1 SKU | 95% Wilson | R@1 style |
+|---|---|---|---|---|
+| low_light | 17 | 0.000 | [0.000, 0.184] | 0.000 |
+| defocus | 24 | 0.000 | [0.000, 0.138] | 0.000 |
+| off_angle | 21 | 0.000 | [0.000, 0.155] | 0.000 |
+| partial_occlusion | 8 | 0.000 | [0.000, 0.324] | 0.000 |
+| cluttered_background | 29 | 0.034 | [0.006, 0.172] | 0.034 |
+| motion_blur | 25 | 0.040 | [0.007, 0.195] | 0.040 |
+| small_in_frame | 14 | 0.071 | [0.013, 0.315] | 0.071 |
+| specular_reflection | 7 | 0.143 | [0.026, 0.513] | 0.143 |
+
+> Cells are small. At n=10 a 95% interval spans roughly ±25 pp, so the **ordering** of these conditions is not resolvable from this set. The marginal-effects table and the synthetic dose-response sweep are what the condition ranking should be read from.
+
+### Marginal effect of each condition (exploratory)
+
+| condition | n | log-odds | 95% CI | avg marginal effect |
+|---|---|---|---|---|
+| defocus | 24 | -0.37 | [-0.78, -0.28] | -0.7 pp |
+| off_angle | 21 | -0.31 | [-0.67, -0.22] | -0.6 pp |
+| low_light | 17 | -0.30 | [-0.72, -0.21] | -0.6 pp |
+| partial_occlusion | 8 | -0.13 | [-0.32, -0.06] | -0.3 pp |
+| cluttered_background | 29 | +0.21 | [+0.11, +0.62] | +0.5 pp |
+| motion_blur | 25 | +0.35 | [+0.23, +0.72] | +0.8 pp |
+| small_in_frame | 14 | +0.48 | [+0.37, +0.86] | +1.2 pp |
+| specular_reflection | 7 | +0.70 | [+0.60, +1.41] | +2.0 pp |
+
+> Conditions co-occur, so per-condition accuracy above is confounded. This fits correctness on the condition indicator matrix to estimate each condition's marginal contribution. Penalised and bootstrapped by item; **exploratory** at this sample size.
+
+### Dose response
+
+Each additional adverse condition multiplies the odds of a correct match by **1.469**.
+
+| # conditions | n | accuracy | 95% Wilson |
+|---|---|---|---|
+| 1 | 46 | 0.022 | [0.004, 0.113] |
+| 2 | 33 | 0.000 | [0.000, 0.104] |
+| 3 | 11 | 0.091 | [0.016, 0.377] |
+
+### Refusal
+
+- AUROC in-catalogue vs out-of-catalogue: **0.502** (120 in, 20 out)
+
+| outcome | count / rate |
+|---|---|
+| in-catalogue, accepted & correct | 3 |
+| in-catalogue, accepted & **wrong** | 25 |
+| in-catalogue, refused (FRR) | 92 (0.767) |
+| out-of-catalogue, accepted (**FAR**) | 0.300 |
+| **wrong-accept rate** | 0.208 |
+
+> The wrong-accept rate is the error a user actually feels, and a bare FAR/FRR pair hides it.
+
+- AURC **0.963**, excess over oracle (E-AURC) **0.064** — E-AURC isolates how well confidence *ranks* its own errors from how many there are.
+
+
+wrote reports/eval/report.md, report.json, per_photo.jsonl
+=== CHAIN2 COMPLETE ===

@@ -74,11 +74,17 @@ def main() -> None:
     ap.add_argument("--n-items", type=int, default=40, help="distinct items to 'photograph'")
     ap.add_argument("--per-item", type=int, default=3, help="hard photos per item")
     ap.add_argument("--n-ooc", type=int, default=20)
+    ap.add_argument("--limit", type=int, default=None,
+                    help="only consider the first N catalogue items -- MUST match the "
+                         "--limit used for `vpm index`, or the test items will not be "
+                         "in the index that is built")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
     rng = np.random.default_rng(args.seed)
     rows = [json.loads(l) for l in args.items.open() if l.strip()]
+    if args.limit:
+        rows = rows[: args.limit]
     have = []
     for r in rows:
         views = [v for v in range(5) if image_path(args.images, r["product_id"], v).exists()]

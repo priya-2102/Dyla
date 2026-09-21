@@ -64,12 +64,25 @@ class Matcher:
         localise_query: bool = True,
         tta: bool = True,
         trim_query: bool = False,
+        whitener=None,
     ):
         self.backbone = backbone
         self.index = index
         self.localise_query = localise_query
         self.tta = tta
         self.trim_query = trim_query
+        # If the catalogue was whitened, the query must pass through the SAME
+        # transform or the two live in different spaces. Fitted on catalogue
+        # embeddings only, so it leaks nothing about the query.
+        self.whitener = whitener
+        if whitener is not None and whitener.components_.shape[0] != index.dim:
+            raise ValueError(
+                f"whitener outputs {whitener.components_.shape[0]} dims but the "
+                f"index has {index.dim}")
+        if whitener is None and backbone.dim != index.dim:
+            raise ValueError(
+                f"backbone emits {backbone.dim} dims but the index has {index.dim}; "
+                "the index was probably built with whitening -- pass the whitener")
 
     def _crops(self, img: Image.Image) -> tuple[list[Image.Image], float | None]:
         """Build the crop set. Order matters only for reporting."""
@@ -100,6 +113,8 @@ class Matcher:
         t = time.perf_counter()
         batch = torch.stack([self.backbone.transform(c) for c in crops])
         q = self.backbone.encode_tensor(batch).numpy()
+        if self.whitener is not None:
+            q = self.whitener.transform(q)
         timings["backbone"] = (time.perf_counter() - t) * 1000
 
         t = time.perf_counter()

@@ -1,0 +1,67 @@
+=== index done ===
+-rw-r--r--@ 1 jaivishal  staff   8.9M Sep 21 20:18 data/index.npz
+=== fitting calibrator ===
+index: 3000 items / 8994 views
+pool: 3000 indexed items, 32493 genuinely-absent items
+Traceback (most recent call last):
+  File "/Users/jaivishal/Desktop/Dyla/scripts/fit_calibrator.py", line 176, in <module>
+    main()
+  File "/Users/jaivishal/Desktop/Dyla/scripts/fit_calibrator.py", line 135, in main
+    out = features_for(pool[int(i)], label)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jaivishal/Desktop/Dyla/scripts/fit_calibrator.py", line 118, in features_for
+    res = matcher.lookup(img, k=5)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jaivishal/Desktop/Dyla/src/vpm/match/pipeline.py", line 110, in lookup
+    sr = self.index.search(vec, k=k, return_all=True)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jaivishal/Desktop/Dyla/src/vpm/index/flat.py", line 88, in search
+    view_scores = self.emb @ q
+                  ~~~~~~~~~^~~
+ValueError: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature (n?,k),(k,m?)->(n?,m?) (size 1536 is different from 256)
+=== running eval ===
+manifest: {
+  "photos": 180,
+  "items": 40,
+  "by_kind": {
+    "clean": 40,
+    "hard": 120,
+    "out_of_catalogue": 20
+  },
+  "by_split": {
+    "dev": 40,
+    "test": 140
+  },
+  "conditions": {
+    "defocus": 34,
+    "low_light": 33,
+    "cluttered_background": 42,
+    "specular_reflection": 17,
+    "small_in_frame": 24,
+    "partial_occlusion": 14,
+    "motion_blur": 35,
+    "off_angle": 31
+  },
+  "mean_conditions_per_hard_photo": 1.65
+}
+no calibrator found -- refusal metrics will fall back to raw cosine
+Traceback (most recent call last):
+  File "/Users/jaivishal/.pyenv/versions/3.11.15/bin/vpm", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/Users/jaivishal/Desktop/Dyla/src/vpm/cli.py", line 224, in main
+    args.func(args)
+  File "/Users/jaivishal/Desktop/Dyla/src/vpm/cli.py", line 60, in _eval
+    results = run_photos(matcher, photos, root, style_of=style_of, k=args.k,
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jaivishal/Desktop/Dyla/src/vpm/eval/harness.py", line 80, in run_photos
+    res = matcher.lookup(img, k=k)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jaivishal/Desktop/Dyla/src/vpm/match/pipeline.py", line 110, in lookup
+    sr = self.index.search(vec, k=k, return_all=True)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jaivishal/Desktop/Dyla/src/vpm/index/flat.py", line 88, in search
+    view_scores = self.emb @ q
+                  ~~~~~~~~~^~~
+ValueError: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature (n?,k),(k,m?)->(n?,m?) (size 1536 is different from 256)
+=== CHAIN COMPLETE ===

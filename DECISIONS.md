@@ -95,6 +95,19 @@ the distinction that matters most here. Both behind flags, off.
 "no match". One-sided evidence: useless for ordering the low-texture majority,
 useful as one calibrator input among many.
 
+### D16 — A guard, not a parameter, for test-set/index agreement
+`vpm eval` had never been run end to end. It surfaced a silent bug: 34 of 40
+"in-catalogue" test items were not in the index, so most in-catalogue photos were
+really out-of-catalogue queries (clean R@1 0.067 vs a 0.672 baseline, refusal
+AUROC 0.502). Fixed with `check_items_indexed`, which fails the run rather than
+with a matching `--limit` flag, because the real hand-shot set is far more
+expensive to get wrong than a synthetic one.
+
+### D17 — Fail at construction on a dimension mismatch
+The whitened index (256d) was queried with unwhitened embeddings (1536d). The
+matcher now carries the whitener and refuses to construct on a mismatch, so the
+error cannot reach query time.
+
 ### D14 — Scope cut: multi-item and the adaptive head
 Both planned, both cut. The brief says solve one thing properly rather than four
 loosely, and rewards error analysis over feature count. Cutting them is the

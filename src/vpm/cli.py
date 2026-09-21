@@ -35,7 +35,8 @@ def _eval(args):
     import warnings
     warnings.filterwarnings("ignore")
     from .catalogue.clusters import style_clusters
-    from .eval.harness import evaluate, run_photos, save, to_markdown
+    from .eval.harness import (check_items_indexed, evaluate, run_photos, save,
+                               to_markdown)
     from .eval.manifest import check_split_disjoint, load_manifest, summarise
 
     matcher, _ce = _load_matcher(args)
@@ -43,6 +44,7 @@ def _eval(args):
     root = Path(args.testset)
     photos = load_manifest(root / "manifest.csv", photo_root=root)
     check_split_disjoint(photos)
+    check_items_indexed(photos, catalogue_ids)
     print("manifest:", json.dumps(summarise(photos), indent=2, default=str))
 
     calibrator = refuser = None
@@ -107,13 +109,21 @@ def _load_matcher(args):
     from .embed.backbone import EncodeConfig, build_backbone
     from .embed.encode import CatalogueEmbeddings
     from .index.flat import FlatIndex, cap_views
+    from .index.pca import PCAWhitening
     from .match.pipeline import Matcher
 
     ce = CatalogueEmbeddings.load(Path(args.index))
     bb = build_backbone(ce.backbone, config=EncodeConfig(image_size=ce.image_size, pooling=ce.pooling))
+    whitener = None
+    wpath = Path(args.index).with_suffix(".whiten.npz")
+    if ce.whiten_dim and wpath.exists():
+        whitener = PCAWhitening.load(wpath)
+    elif ce.whiten_dim:
+        raise SystemExit(f"index is whitened to {ce.whiten_dim} dims but {wpath} is missing")
     keep = cap_views(ce.emb, ce.item_ids, k=args.cap_views)
     idx = FlatIndex(ce.emb[keep], ce.item_ids[keep], ce.view_ids[keep])
-    return Matcher(bb, idx, localise_query=not args.no_localise, tta=not args.no_tta), ce
+    return Matcher(bb, idx, localise_query=not args.no_localise, tta=not args.no_tta,
+                   whitener=whitener), ce
 
 
 def _query(args):

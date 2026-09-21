@@ -218,3 +218,37 @@ def test_mcnemar_is_symmetric_under_swap():
     a = np.array([1, 1, 1, 0, 0], bool)
     b = np.array([0, 0, 1, 0, 1], bool)
     assert mcnemar_exact(a, b)["p_value"] == pytest.approx(mcnemar_exact(b, a)["p_value"])
+
+
+def test_matcher_rejects_dimension_mismatch():
+    """Regression: a whitened index with an unwhitened query is a silent space mismatch.
+
+    This shipped broken once -- the index was whitened to 256 dims while queries
+    were encoded at 1536 -- and only surfaced when the eval path was first run
+    end to end. Fail loudly at construction instead.
+    """
+    from vpm.match.pipeline import Matcher
+
+    class _BB:
+        dim = 1536
+    rng = np.random.default_rng(0)
+    emb = rng.normal(size=(10, 256)).astype(np.float32)
+    emb /= np.linalg.norm(emb, axis=1, keepdims=True)
+    idx = FlatIndex(emb, np.arange(10))
+    with pytest.raises(ValueError, match="whitening"):
+        Matcher(_BB(), idx, whitener=None)
+
+
+def test_in_catalogue_items_must_be_indexed():
+    """Regression: labelling a photo in-catalogue when its item is not indexed
+    silently turns it into an out-of-catalogue query and corrupts every metric."""
+    from vpm.eval.harness import TestSetError, check_items_indexed
+
+    photos = [
+        Photo("a", "a.jpg", 111, "hard", "test"),
+        Photo("b", "b.jpg", 999, "hard", "test"),        # not in the index
+        Photo("c", "c.jpg", None, "out_of_catalogue", "test"),
+    ]
+    check_items_indexed([photos[0], photos[2]], {111})   # fine
+    with pytest.raises(TestSetError, match="NOT in the"):
+        check_items_indexed(photos, {111})

@@ -49,6 +49,34 @@ class PhotoResult:
     set_size: int | None = None
 
 
+class TestSetError(ValueError):
+    pass
+
+
+def check_items_indexed(photos: list[Photo], catalogue_ids: set[int]) -> None:
+    """Every photo labelled in-catalogue must have its item IN the index.
+
+    The brief requires Part B photos to be of items "genuinely in your
+    catalogue". If an item is labelled in-catalogue but absent from the index,
+    the photo is silently an out-of-catalogue query and every accuracy number
+    computed from it is wrong -- accuracy is understated and the refusal AUROC
+    collapses toward 0.5 because both classes are really the same class.
+
+    This shipped broken once: the synthetic set was drawn from all 36,506 scraped
+    items while the index held the first 3,000, so 34 of 40 "in-catalogue" items
+    were never in the catalogue. Cheap to check, catastrophic to miss.
+    """
+    labelled = {p.item_id for p in photos
+                if p.kind != "out_of_catalogue" and p.item_id is not None}
+    missing = sorted(labelled - catalogue_ids)
+    if missing:
+        raise TestSetError(
+            f"{len(missing)} of {len(labelled)} in-catalogue test items are NOT in the "
+            f"index: {missing[:10]}{' ...' if len(missing) > 10 else ''}\n"
+            "Every accuracy number would be wrong. Rebuild the index over these items, "
+            "or regenerate the test set from the indexed slice.")
+
+
 def run_photos(
     matcher: Matcher,
     photos: list[Photo],

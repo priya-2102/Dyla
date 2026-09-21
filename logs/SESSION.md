@@ -174,6 +174,54 @@ dinov2-small-reg   components=1  largest=103/103 bbox rows 3-12   (correct)
 Two fixes, both kept: the register variant, and the bbox of the largest connected
 component rather than of all above-threshold patches.
 
+### 4.4 The eval path had never been run, and it was broken two ways
+
+The gate is *"does it run from a clean checkout"*. I had built the whole
+evaluation harness without once executing `vpm eval` end to end. Running it
+surfaced two bugs, both of which would have produced a submission full of
+confident, wrong numbers.
+
+**Dimension mismatch.** The index was PCA-whitened to 256 dims; queries were
+encoded at 1536 and never passed through the whitener.
+
+```
+ValueError: matmul: Input operand 1 has a mismatch in its core dimension 0
+(size 1536 is different from 256)
+```
+
+This one at least failed loudly. Fixed by carrying the whitener through the
+matcher, and by a constructor check that refuses a backbone/index dimension
+mismatch instead of discovering it at query time.
+
+**The silent one, which was worse.** The first successful run reported clean
+Recall@1 of 0.067 against a bake-off figure of 0.672, while simultaneously
+reporting median rank of the true item as 1. Those two cannot both be true, and
+that contradiction is what made it findable.
+
+```
+items in index: 3000
+distinct test items: 40
+test items ACTUALLY IN THE INDEX: 6 (15%)
+```
+
+The synthetic test set was drawn from all 36,506 scraped items while the index
+held only the first 3,000. **34 of 40 "in-catalogue" test items were never in the
+catalogue**, so most in-catalogue photos were silently out-of-catalogue queries:
+accuracy understated, and the refusal AUROC collapsing to 0.502 because both
+classes were really the same class.
+
+The fix that matters is not the parameter. It is `check_items_indexed`, which
+fails the run if any photo labelled in-catalogue has an item absent from the
+index. That guard exists because this is precisely the failure mode the brief
+warns about for Part B — *"items that are genuinely in your catalogue"* — and the
+real hand-shot set is far more expensive to get wrong than a synthetic one.
+
+**What I take from this:** a metric that is merely *bad* is easy to rationalise.
+Both of these were caught because they were *impossible* — a 10× gap against a
+known baseline, and a rank-1 truth that was somehow not the top-1 answer. Build
+enough cross-checks that errors show up as contradictions rather than as
+disappointing numbers.
+
 ---
 
 ## Phase 5 — the unexpected result
