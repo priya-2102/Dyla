@@ -1,0 +1,4 @@
+excluding 46 product ids from the index (out-of-catalogue items and their colourway twins)
+encoding with siglip2-base @256px (dim 1536) on mps
+  encoded 2000/8994 views (missing 0)
+  encoded 4000/8994 views (missing 0)

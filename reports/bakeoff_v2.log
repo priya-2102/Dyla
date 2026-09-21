@@ -1,0 +1,3 @@
+pool: 1200 items with >=3 downloaded views (200 held out of the index as open-set negatives)
+style clusters: 913 over 1200 items (1.31 SKUs/style)
+{"backbone": "dinov2-small-reg", "dim": 768, "image_size": 224, "pooling": "cls_patch", "n_index_rows": 3962, "n_items": 993, "index_seconds": 164.1, "clean_r1": 0.3061, "clean_r5": 0.4814, "clean_style_r1": 0.3474, "clean_style_r5": 0.5206, "clean_n": 993, "clean_auroc": 0.4484, "clean_pos_mean": 0.8509, "clean_neg_mean": 0.8689, "hard_r1": 0.007, "hard_r5": 0.0262, "hard_style_r1": 0.0131, "hard_style_r5": 0.0493, "hard_n": 993, "hard_auroc": 0.4525, "hard_pos_mean": 0.4975, "hard_neg_mean": 0.5137, "total_seconds": 678.3}
